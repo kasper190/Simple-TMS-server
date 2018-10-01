@@ -1,4 +1,12 @@
 from datetime import datetime
+from math import (
+    cos,
+    log,
+    pi,
+    radians,
+    tan,
+    trunc,
+)
 import os
 from osgeo import (
     gdal,
@@ -13,6 +21,7 @@ from time import (
     gmtime,
     strftime
 )
+import warnings
 
 
 input_path = 'TIF_FILES/'
@@ -70,6 +79,76 @@ class TifInfo(object):
         if created:
             created = datetime.strptime(created, "%Y:%m:%d %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
         return created
+
+
+class Marker(object):
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.filename = os.path.basename(filepath)
+        self.basename = os.path.splitext(self.filename)[0]
+        self.extension = os.path.splitext(self.filename)[1]
+        self.lng, self.lat = TifInfo(filepath).get_center()
+
+    def zoomPointTotileXY(self, zoom):
+        MinLatitude = -85.05112878
+        MaxLatitude = 85.05112878
+        MinLongitude = -180
+        MaxLongitude = 180
+        mapSize = (2 ** zoom) * 256
+
+        latitude = min(max(self.lat, MinLatitude), MaxLatitude)
+        longitude = min(max(self.lng, MinLongitude), MaxLongitude)
+        p = {
+            'x': (longitude + 180.0) / 360.0 * (1 << zoom),
+            'y': (1.0 - log(tan(latitude * pi / 180.0) + 1.0 / cos(radians(self.lat))) / pi) / 2.0 * (1 << zoom)
+        }
+
+        tileX  = int(trunc(p['x']))
+        tileY  = int(trunc(p['y']))
+        x_point = int((p['x'] - tileX) * 256)
+        y_point = int((p['y'] - tileY) * 256)
+        return x_point, y_point
+
+    def zoomPointToWMTS(self, zoom):
+        lat_rad = radians(self.lat)
+        n = 2.0 ** zoom
+        x_tile = int((self.lng + 180.0) / 360.0 * n)
+        y_tile = int((1.0 - log(tan(lat_rad) + (1 / cos(lat_rad))) / pi) / 2.0 * n)
+        return x_tile, y_tile
+
+    def save_tiles_at_zoom(self, zoom, output_path='./'):
+        tile_width, tile_height = (256, 256)
+        overlay = Marker(self.filepath)
+        x_point, y_point = overlay.zoomPointTotileXY(zoom)
+        x_tile, y_tile = overlay.zoomPointToWMTS(zoom)
+        marker = Image.open("static/img/marker.png")
+        marker_width, marker_height = marker.size
+
+        tile = Image.new("RGBA", (tile_width * 3, tile_height * 3), (0, 0, 0, 0))
+        tile.paste(marker, (tile_width + x_point - int(marker_width / 2), tile_height + y_point - marker_height))
+        for i, num_i in enumerate((-1, 0, 1)):
+            for j, num_j in enumerate((-1, 0, 1)):
+                new_tile = tile.crop((
+                    tile_width * i, tile_height * j, tile_width + tile_width * i, tile_height + tile_height * j
+                ))
+                if new_tile.getbbox():  # If the image is not full transparent
+                    filename = output_path + '/' + str(overlay.basename) + '_markers/' + str(zoom) + '/' + \
+                               str(x_tile + num_i) + '/' + str(y_tile + num_j) + '.png'
+                    os.makedirs(os.path.dirname(filename), exist_ok=True)
+                    new_tile.save(filename, format="png")
+        return True
+
+    def save_tiles_to_zoom(self, zoom, output_path='./'):
+        try:
+            for i in range(zoom + 1):
+                self.save_tiles_at_zoom(i, output_path)
+        except Exception as e:
+            print('\x1b[1;31;38m' + 'The marker tiles of the ' + str(self.basename + self.extension) +
+                  ' file cannot be saved.' + '\x1b[0m')
+            print('\x1b[1;31;38m' + 'Error: ' + e + '\x1b[0m')
+        finally:
+            print('The marker tiles for the ' + str(self.basename + self.extension) + ' file have been saved.')
+        return True
 
 
 class TifToDb(object):
@@ -148,12 +227,19 @@ class TifToDb(object):
             cur.execute('''DELETE FROM tiffmaps_overlay WHERE mapname = ? ''', (self.mapname,))
         return True
 
+    def db_select_overlays(self):
+        with self.con:
+            cur = self.con.cursor()
+            cur.execute('''SELECT mapname, extension FROM tiffmaps_overlay''')
+            return cur.fetchall()
+
 
 class TifToJPG(object):
     def img_save(self, input_path, output_path, filename):
         mapname = os.path.splitext(filename)[0]
 
         try:
+            warnings.simplefilter('ignore', Image.DecompressionBombWarning)
             img = Image.open(input_path + filename)
             if img.format is not 'TIFF':
                 print('\x1b[1;31;38m' + 'The image is not in TIFF format.' + '\x1b[0m')
@@ -209,6 +295,7 @@ class TifToTiles(object):
             print('\x1b[1;31;38m' + 'The ' + filename + ' file cannot be saved.' + '\x1b[0m')
             return False
         else:
+            Marker(filename).save_tiles_to_zoom(6, output_path)
             TifToDb().db_record_save(filename)
             TifToJPG().img_save(input_path, output_path, filename)
         print('\x1b[1;32;38m' + 'The ' + filename + ' file has been saved.' + '\x1b[0m')
@@ -230,22 +317,26 @@ class TifToTiles(object):
         try:
             os.remove(input_path + filename)
         except OSError:
-            print('\x1b[1;31;38m' + 'The ' + filename + ' file does not exist in the ' + input_path + ' directory.' +
-                  '\x1b[0m')
+            pass
 
         try:
             rmtree(output_path + mapname, ignore_errors=False)
         except OSError:
             print('\x1b[1;31;38m' + 'The ' + output_path + mapname + ' directory does not exist.' + '\x1b[0m')
+
+        try:
+            rmtree(output_path + mapname + '_markers', ignore_errors=False)
+        except OSError:
+            print('\x1b[1;31;38m' + 'The ' + output_path + mapname + '_markers directory does not exist.' + '\x1b[0m')
             return False
 
         print('\x1b[1;32;38m' + 'The ' + filename + ' file has been removed.' + '\x1b[0m')
         return True
 
     def img_all_remove(self, input_path, output_path):
-        filenames = [x for x in os.listdir(input_path) if x.endswith(".tif") or x.endswith(".tiff")]
-        for filename in filenames:
-            self.img_remove(input_path, output_path, filename)
+        overlays = TifToDb().db_select_overlays()
+        for i in range(len(overlays)):
+            self.img_remove(input_path, output_path, overlays[i][0] + overlays[i][1])
         print('\x1b[1;32;38m' + 'All files have been removed.' + '\x1b[0m')
         return True
 

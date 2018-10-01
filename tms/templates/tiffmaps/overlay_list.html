@@ -118,7 +118,6 @@
 <script type="text/javascript">
 
   var map;
-  var markers = [];
   var Settings = {};
 
   function initMap() {
@@ -131,53 +130,10 @@
       center: {lat: Settings.default_centery , lng: Settings.default_centerx},
     });
 
-    for (var i = 0; i < Settings.overlay.length; i++) {
-      addMarker(
-        Settings.img_url,
-        Settings.overlay[i]
-      )
-    }
-    if (map.getZoom() > 9) {
-      clearMarkers();
-    }
-
-    map.addListener('zoom_changed', function() {
-      if (map.getZoom() > 9) {
-        if (markers[0].map) {
-          clearMarkers();
-        }
-      } else {
-        if (!markers[0].map) {
-          setMapOnAll(map);
-        }
-      }    
-    });
-  }
-
-  function addMarker(img_url, Overlay) {
-    var image = new google.maps.MarkerImage(img_url + '/pointner.png', null, null, null, new google.maps.Size(60,60));
-    var marker = new google.maps.Marker({
-      position: new google.maps.LatLng(Overlay.centery, Overlay.centerx),
-      map: map,
-      icon: image,
-      title: Overlay.mapname + Overlay.extension
-    });
-    markers.push(marker);
-
-    var infocontent = '<table class="overlay-table">' +
-                      '<tr><td><h3>' + Overlay.mapname + Overlay.extension + '</h3></td></tr>' +
-                      '<tr><td><strong>minX:</strong> </td><td>' + Overlay.minx + '</td><td><strong>&nbsp;&nbsp; maxX:</strong> ' + Overlay.maxx + '</td></tr>' +
-                      '<tr class="overlay-cell"><td><strong>miny:</strong> </td><td>' + Overlay.miny + '</td><td><strong>&nbsp;&nbsp; maxY:</strong> ' + Overlay.maxy + '</td></tr>' +
-                      '<tr><td><strong>centerX:</strong> </td><td>' + Overlay.centerx + '</td></tr>' +
-                      '<tr class="overlay-cell"><td><strong>centerY:</strong> </td><td>' + Overlay.centery + '</td></tr>' +
-                      '<tr><td><strong>Created:</strong> </td><td>' + Overlay.created + '</td></tr>' +
-                      '<tr><td><strong>Publish:</strong> </td><td>' + Overlay.publish + '</td></tr>' +
-                      '</table>';
-    var infowindow = new google.maps.InfoWindow({
-      content: infocontent,
-    });
-    google.maps.event.addListener(marker, 'click', function() {
-      infowindow.open(map, marker);
+    map.addListener('projection_changed', function() {
+      for (var i = 0; i < Settings.overlay.length; i++) {
+        showOverlay(Settings.overlay[i].mapname + '_markers');
+      }
     });
   }
 
