@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+{% block content %}
+
+<div class="error">
+  <div class="content">
+  	<img src='{% static "img/apptimia_logo.png" %}' width="179" height="52" alt="Simple TMS Server">
+  	<h2>HTTP 500 error: Internal Server Error</h2>
+  	<p>Go back to <a href="{% url 'tiffmaps:overlay-list' %}">the main page</a></p>
+  </div>
+</error>
+
+{% endblock content %}

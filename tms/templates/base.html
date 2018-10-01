@@ -1,0 +1,24 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Simple TMS server">
+    <meta name="author" content="Krystian Kasperski">
+
+    <title>{% block head_title %}Simple TMS Server{% endblock head_title %}</title>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous" rel="stylesheet">
+    <link href='{% static "css/style.css" %}' rel="stylesheet">
+
+    {% block head_extra %} {% endblock head_extra %}
+  </head>
+
+  <body>
+    
+    {% block content %}{% endblock content %}
+
+  </body>
+</html>

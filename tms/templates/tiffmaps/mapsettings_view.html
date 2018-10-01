@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+{% block content %}
+
+<div class="row">
+
+  <div class="col-xs-12 col-sm-6 col-sm-offset-3 col-md-4 col-md-offset-4 col-lg-4 col-lg-offset-4">
+    <div class="map-settings">
+      <h2>Simple TMS Server Settings</h2>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger col-sm-12">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+    
+    <form method="post" action="{% url 'tiffmaps:map-settings-view' %}">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <p>
+        <input type="submit" class="btn btn-success" value="Save">
+         <a href="{% url 'tiffmaps:overlay-list' %}" class="btn btn-warning">Cancel</a>
+      </p>
+    </form>
+
+</div>
+
+{% endblock content %}
